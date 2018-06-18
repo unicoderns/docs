@@ -1,0 +1,36 @@
+{
+    "dev": true,
+    "token": "JT39AdY@4az3N$nC@@v4RW?5-XUykgs8xZJ*ksnhdEnMUAF7pJDe!!NHS^k9+=@=#peKZq&W-nJNG7^&JwWSYXJ-3RfFZP2CHXuVrpHvPWWuH6KFt$6f+-bmV?jYtsaePd54ZSxQyE@D*!E!AKa*fDkK6qakq3SJnKkm-@-Zzx&7EpD$CB594EL4XVq=eqrEdK?qwWs67&FK@!F%2#d+JK^rzC^st9H!@%%ytLC@HPZyW?nNREuyFEDM7TGWUL&q",
+    "mysql": {
+        "user": "docsuser",
+        "password": "yX~{m2J7RY(jAu<K",
+        "db": "docsdb",
+        "port": 3306,
+        "host": "docsdb.cfg7szlzji4m.us-east-1.rds.amazonaws.com",
+        "connectionLimit": 10,
+        "validations": {
+            "fields": true
+        }
+    },
+    "system_apps": [{
+        "name": "auth",
+        "engine": "ejs",
+        "basepath": "/auth/",
+        "config": {
+            "session": "stateful",
+            "cookie": true,
+            "expiration": 157680000
+        }
+    }, {
+        "name": "health",
+        "engine": "ejs",
+        "basepath": "/health/",
+        "config": {}
+    }],
+    "custom_apps": [{
+        "name": "sample",
+        "engine": "ejs",
+        "basepath": "/",
+        "config": {}
+    }]
+}

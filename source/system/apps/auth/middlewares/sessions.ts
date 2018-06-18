@@ -123,7 +123,7 @@ export default class Sessions {
         let token = req.body.token || req.query.token || req.headers["x-access-token"] || req.signedCookies.token;
         let config: any = this.config;
         let userCache = this.userCache;
-        let sessionTable = new session.Session_Track(this.jsloth);
+        let sessionTable = new session.SessionTrack(this.jsloth);
         // Clean user
         req.user = undefined;
         // Decode token
@@ -174,7 +174,7 @@ export default class Sessions {
         // Check header or url parameters or post parameters for token
         let token = req.body.token || req.query.token || req.headers["x-access-token"] || req.signedCookies.token;
         let config: any = this.config;
-        let sessionTable = new session.Session_Track(this.jsloth);
+        let sessionTable = new session.SessionTrack(this.jsloth);
         let userTable = new user.Users(this.jsloth);
         // Decode token
         if (token) {

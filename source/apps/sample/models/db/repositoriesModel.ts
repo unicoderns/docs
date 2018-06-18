@@ -35,9 +35,7 @@ export interface Row {
     user: number;
 }
 
-/**
- * User Model
- */
+
 export class Repositories extends Model {
 
     @field()
@@ -50,15 +48,28 @@ export class Repositories extends Model {
     });
 
     @field()
-    public ip: fields.DataType = new datatypes.Datatypes().VARCHAR({
-        size: 39,
+    public url: fields.DataType = new datatypes.Datatypes().VARCHAR({
+        size: 90,
         notNull : true
     });
 
     @field()
-    public user: fields.DataType = new datatypes.Datatypes().INT({
-        notNull: true,
-        unique: true
+    public mount: fields.DataType = new datatypes.Datatypes().VARCHAR({
+        size:45,
+        notNull: true
+       
+    });
+
+    @field()
+    public folder: fields.DataType = new datatypes.Datatypes().VARCHAR({
+        size:45,
+        notNull: true
+       
+    });
+
+    @field()
+    public synced: fields.DataTimestampType = new datatypes.Datatypes().TIMESTAMP({
+        default: defaults.Timestamp.CURRENT_TIMESTAMP
     });
 
 

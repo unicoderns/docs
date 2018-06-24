@@ -95,7 +95,7 @@ export default class Batch {
      * @param to Path to remove
      * @param next
      */
-    private rm = (to: string): Promise<any> => {
+    public rm = (to: string): Promise<any> => {
         const p: Promise<boolean> = new Promise(
             (resolve: () => void, reject: (err: NodeJS.ErrnoException) => void) => {
                 this.exec("rm -r " + to, function (err: any, stdout: any, stderr: any) {

@@ -48,14 +48,14 @@ let bcrypt = require("bcrypt-nodejs");
  */
 export default class IndexEndPoint extends ApiController {
     private usersTable: users.Users;
-    private sessionTable: session.Session_Track;
+    private sessionTable: session.SessionTrack;
     private sessionsMiddleware: Sessions;
     private emailRegex = /^([a-zA-Z0-9_\.\-])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
 
     constructor(jsloth: JSloth, config: any, url: string, namespaces: string[]) {
         super(jsloth, config, url, namespaces);
         this.usersTable = new users.Users(jsloth);
-        this.sessionTable = new session.Session_Track(jsloth);
+        this.sessionTable = new session.SessionTrack(jsloth);
         this.sessionsMiddleware = new Sessions(jsloth, config)
     }
 

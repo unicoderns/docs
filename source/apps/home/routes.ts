@@ -26,7 +26,6 @@
 
 import Routes from "../../system/abstract/controllers/routes";
 import IndexController from "./controllers/index";
-import AdminController from "./controllers/admin";
 
 /**
  * Centralized Controller Routes Loader 
@@ -37,8 +36,7 @@ export class Urls extends Routes {
 
     /*** Configure routes */
     protected init(): void {
-        this.include(AdminController, "/admin/", "admin");
-        this.include(IndexController, "/docs/*", "index");
+        this.include(IndexController, "/", "index");
     }
 
 }

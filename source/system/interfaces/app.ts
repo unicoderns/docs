@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -31,12 +31,25 @@ export interface App {
   errors: Errors;
 }
 
+/*** Dash config interface. */
+export interface Dash {
+  activate: boolean;
+}
+
+/*** Admin config interface. */
+export interface Admin {
+  activate: boolean;
+}
+
 /*** App configuration interface. */
 export interface Config {
   name: string;
+  dash?: Dash;
+  admin?: Admin;
   engine?: string;
   basepath?: string;
   folder?: string;
+  config: any;
 }
 
 /*** App status interface. */
@@ -44,6 +57,8 @@ export interface Status {
   api: boolean;
   public: boolean;
   routes: boolean;
+  dash: boolean;
+  admin: boolean;
   scss: boolean;
 }
 
@@ -52,5 +67,7 @@ export interface Errors {
   api: string;
   public: string;
   routes: string;
+  dash: string;
+  admin: string;
   scss: string;
 }

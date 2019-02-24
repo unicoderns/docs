@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -25,15 +25,18 @@
 import * as app from "../interfaces/app";
 import * as bodyParser from "body-parser"; // Parse incoming request bodies
 import * as cookieParser from "cookie-parser";
-import * as express from "express";
 import * as logger from "morgan";  // Log requests
+import * as express from "express";
+import * as fse from "fs-extra"
 
 import Apps from "./apps";
+import chalk from "chalk";
 import Sessions from "../apps/auth/middlewares/sessions";
 import SysConfig from "../interfaces/config";
-import JSFiles from "../lib/files";
 import JSloth from "../lib/core";
 import Log from "./log";
+
+import { Application, Request, Response, NextFunction } from "express"
 
 /**
  * Creates and configure an ExpressJS web server.
@@ -42,20 +45,18 @@ import Log from "./log";
  */
 export default class Core {
     /*** Express instance */
-    public express: express.Application;
+    public express: Application;
 
     /**
      * Stores the app port
-     * @default port System environment port or 3000
+     * @default port System environment port or 8080
      * Please note: the unary + cast to number
      */
     protected port: number = +process.env.PORT || 8080;
 
     /*** Default configuration filepath */
     protected configPath: string = "/../../../config.json";
-
-    /*** Configuration object */
-    protected config: SysConfig;
+    protected defaultConfigPath: string = "/../../../sample_config.json";
 
     /*** Apps object */
     protected apps: app.App[] = [];
@@ -67,9 +68,6 @@ export default class Core {
      * Load configuration settings, set up JSloth Global Library and start installation.
      */
     constructor() {
-        // Loading JSloth Files directly to load the config file.
-        let jslothFiles = new JSFiles();
-
         // Creating App
         this.express = express();
 
@@ -77,24 +75,40 @@ export default class Core {
 
         // Mount static files
         Log.module("Static files published");
-        this.express.use('/', express.static(__dirname + '/../../../dist/angular/browser/', { index: false, extensions: ['html', 'js', 'css'] }));
         this.express.use('/', express.static(__dirname + '/../../../dist/static/'));
 
+        let start = ((config: SysConfig) => {
+            // Loading JSloth Global Library
+            try {
+                this.jsloth = new JSloth(config, __dirname);
+            }
+            catch (err) {
+                console.error(err);
+            }
+            this.express.set("jsloth", this.jsloth);
+            Log.module("Core library loaded");
 
-        // Loading Configuration
-        jslothFiles.exists(__dirname + this.configPath).then(() => {
-            this.config = require(__dirname + this.configPath);
-            this.express.set("token", this.config.token); // secret token
+            this.express.set("token", this.jsloth.config.token); // secret token
             Log.module("Configuration loaded");
             this.install();
-        }).catch(err => {
-            if (err.code === "ENOENT") {
-                Log.error("Configuration file not found");
+        });
+
+        // Loading Configuration
+        fse.pathExists(__dirname + this.configPath).then((exists) => {
+            if (exists) {
+                let config = require(__dirname + this.configPath);
+                start(config);
             } else {
-                Log.error("Something went wrong");
+                Log.error("Configuration file not found");
+                let config = require(__dirname + this.defaultConfigPath);
+                console.log(chalk.yellow("Sample config is used instead"));
+                start(config);
             }
+        }).catch(err => {
+            Log.error("Something went wrong");
             Log.error(err);
         });
+
     }
 
     /**
@@ -102,16 +116,12 @@ export default class Core {
      */
     protected install(): void {
         let appsModule: Apps;
-        // Loading JSloth Global Library
-        this.jsloth = new JSloth(this.config, __dirname);
-        this.express.set("jsloth", this.jsloth);
-        Log.module("Core library loaded");
 
         // Installing Middlewares
         this.middleware();
 
         // Installing Apps
-        appsModule = new Apps(this.config, this.jsloth, this.express);
+        appsModule = new Apps(this.jsloth.config, this.jsloth, this.express);
         appsModule.install((apps: app.App[]) => {
             this.apps = apps;
             this.start();
@@ -120,8 +130,7 @@ export default class Core {
 
     /*** Configure Express middlewares */
     protected middleware(): void {
-        let auth_config = this.config.system_apps.find((x: any) => x.name == 'auth');
-        let sessions = new Sessions(this.jsloth, auth_config);
+        let sessions = new Sessions(this.jsloth);
         // Log hits using morgan
         if (this.jsloth.config.dev) {
             this.express.use(logger("dev"));
@@ -131,8 +140,8 @@ export default class Core {
         // Use body parser so we can get info from POST and/or URL parameters
         this.express.use(bodyParser.json());
         this.express.use(bodyParser.urlencoded({ extended: false }));
-        this.express.use(cookieParser(this.config.token));
-        this.express.use(sessions.context);        
+        this.express.use(cookieParser(this.jsloth.config.token));
+        this.express.use(sessions.context);
         Log.module("Middlewares loaded");
     }
 
@@ -145,6 +154,20 @@ export default class Core {
             // Everything is installed?
             if (done) {
                 try {
+
+                    // Errors and 404  
+                    this.express.get("/*", function (req: Request, res: Response, next: NextFunction): any {
+                        return res.redirect("/errors/404/");
+                    });
+                    this.express.use(function (err: any, req: Request, res: Response, next: NextFunction): any {
+                        console.error(err);
+                        if (!err.status) {
+                            return res.redirect("/errors/500/");
+                        } else {
+                            return res.redirect("/errors/" + err.status + "/");
+                        }
+                    });
+                    // run
                     this.express.listen(this.port);
                     Log.run(this.port);
                 } catch (e) {

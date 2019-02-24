@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -24,13 +24,11 @@
 
 /// <reference path="../types/express.d.ts"/>
 
-import Config from "../../../interfaces/config";
 import JSloth from "../../../lib/core";
 import { Router, Request, Response, NextFunction, RequestHandler } from "express";
 
 import * as jwt from "jsonwebtoken";
-import * as session from "../models/db/sessionTrackModel";
-import * as user from "../models/db/usersModel";
+import * as sessions from "@unicoderns/cerberus/db/sessionsModel";
 
 /**
  * JSloth Session Middlewares
@@ -38,58 +36,15 @@ import * as user from "../models/db/usersModel";
 export default class Sessions {
     protected config: any;
     protected jsloth: JSloth;
-    protected cache: any;
 
     /**
      * Load library, app configuration and install routes 
      */
-    constructor(jsloth: JSloth, config: Config) {
+    constructor(jsloth: JSloth) {
         this.jsloth = jsloth;
-        this.config = config;
-        this.cache = {};
+        this.config = jsloth.config;
     }
 
-    /**
-     * User cache factory
-     * 
-     * @param id {number} The user id.
-     * @return Promise.
-     */
-    private userCache = (id: number, cached: boolean = true): Promise<any> => {
-        let userTable = new user.Users(this.jsloth);
-        let that = this;
-        function fromSQL() {
-            // Create promise
-            const p: Promise<any> = new Promise(
-                (resolve: (data: any) => void, reject: (err: any) => void) => {
-                    userTable.get([], { id: id }).then((user: any) => {
-                        let user_temp = JSON.parse(JSON.stringify(user));
-                        that.cache[id] = user_temp;
-                        resolve(user_temp);
-                    }).catch(err => {
-                        reject(err);
-                        throw err;
-                    });
-                }
-            );
-            return p;
-        }
-
-        if (cached) {
-            let user_temp = that.cache[id];
-            if (typeof user_temp == "undefined") {
-                return fromSQL();
-            } else {
-                const p: Promise<any> = new Promise(
-                    (resolve: (data: any) => void) => {
-                        resolve(user_temp);
-                    });
-                return p;
-            }
-        } else {
-            return fromSQL();
-        }
-    }
 
     /**
      * Force an update context user
@@ -100,14 +55,14 @@ export default class Sessions {
      */
     public updateContext = (req: Request, res: Response, next: NextFunction) => {
         let token = req.body.token || req.query.token || req.headers["x-access-token"] || req.signedCookies.token;
-        // Verifies secret and checks exp
-        jwt.verify(token, req.app.get("token"), function (err: NodeJS.ErrnoException, decoded: any) {
-            this.userCache(decoded.user, false).then((user: any) => {
-                return next();
-            }).catch(err => {
-                console.error(err);
-                return next();
-            });
+
+        this.jsloth.cerberus.sessions.getUpdated(token).then((reply) => {
+            req.user = reply.user;
+            return next();
+        }).catch(err => {
+            console.error(err.error);
+            req.user = undefined;
+            return next();
         });
     }
 
@@ -119,47 +74,32 @@ export default class Sessions {
      * @param next Callback.
      */
     public context = (req: Request, res: Response, next: NextFunction) => {
-        // Check header or url parameters or post parameters for token
         let token = req.body.token || req.query.token || req.headers["x-access-token"] || req.signedCookies.token;
-        let config: any = this.config;
-        let userCache = this.userCache;
-        let sessionTable = new session.SessionTrack(this.jsloth);
-        // Clean user
-        req.user = undefined;
-        // Decode token
-        if (token) {
-            req.token = token;
-            // Verifies secret and checks exp
-            jwt.verify(token, req.app.get("token"), function (err: NodeJS.ErrnoException, decoded: any) {
-                if (err) {
-                    return next();
-                } else {
-                    if (config.config.session == "stateful") {
-                        sessionTable.get([], { id: decoded.session, user: decoded.user }).then((session: any) => {
-                            if (typeof session == "undefined") {
-                                return next();
-                            } else {
-                                userCache(decoded.user).then((user: any) => {
-                                    req.user = user;
-                                    return next();
-                                }).catch(err => {
-                                    console.error(err);
-                                    return next();
-                                });
-                            }
-                        }).catch(err => {
-                            console.error(err);
-                            return next();
-                        });
-                    } else {
-                        // If everything is good, save to request for use in other routes
-                        req.user = decoded;
-                        return next();
-                    }
-                }
-            });
-        } else {
+
+        this.jsloth.cerberus.sessions.get(token).then((reply) => {
+            req.user = reply.user;
             return next();
+        }).catch(err => {
+            console.log(err);
+            req.user = undefined;
+            return next();
+        });
+    }
+
+    /**
+     * Session token verification
+     * 
+     * @param res {Response} The response object.
+     * @param format {string} Kind of reply.
+     * @param json Custom json to reply.
+     */
+    private reply = (res: Response, format: string = "html", json: any) => {
+        if (format == "html") {
+            return res.redirect("/errors/404/");
+        } else if (format == "redirect") {
+            return res.redirect("/auth/");
+        } else {
+            return res.status(401).send(json);
         }
     }
 
@@ -170,69 +110,52 @@ export default class Sessions {
      * @param res {Response} The response object.
      * @param next Callback.
      */
-    public auth = (req: Request, res: Response, next: NextFunction) => {
-        // Check header or url parameters or post parameters for token
-        let token = req.body.token || req.query.token || req.headers["x-access-token"] || req.signedCookies.token;
-        let config: any = this.config;
-        let sessionTable = new session.SessionTrack(this.jsloth);
-        let userTable = new user.Users(this.jsloth);
-        // Decode token
-        if (token) {
-            req.token = token;
-            // Verifies secret and checks exp
-            jwt.verify(token, req.app.get("token"), function (err: NodeJS.ErrnoException, decoded: any) {
-                if (err) {
-                    return res.json({ success: false, message: "Failed to authenticate token." });
-                } else {
-                    if (config.config.session == "stateful") {
-                        sessionTable.get([], { id: decoded.session, user: decoded.user }).then((session: any) => {
-                            if (typeof session == "undefined") {
-                                return res.status(401).send({
-                                    success: false,
-                                    message: "Session is not longer available."
-                                });
-                            } else {
-                                userTable.get([], { id: decoded.user }).then((user: any) => {
-                                    req.user = JSON.parse(JSON.stringify(user));
-                                    return next();
-                                }).catch(err => {
-                                    console.error(err);
-                                    return next();
-                                });
-                            }
-                        }).catch(err => {
-                            console.error(err);
-                            return res.status(401).send({
-                                success: false,
-                                message: "Something went wrong."
-                            });
-                        });
-                    } else {
-                        // If everything is good, save to request for use in other routes
-                        req.user = decoded;
-                        return next();
-                    }
-                }
-            });
-        } else {
-            // if there is no token
-            // return an error
-            return res.status(400).send({
-                success: false,
-                message: "No token provided."
-            });
-
+    public auth = (format: string = "html"): RequestHandler => {
+        return (req: Request, res: Response, next: NextFunction) => {
+            if (req.user) {
+                return next();
+            } else {
+                this.reply(res, format, {
+                    success: false,
+                    message: "User is not logged."
+                });
+            }
         }
     }
 
-    public isVerified = (req: Request, res: Response, next: NextFunction) => {
-        if (req.user.verified) {
-            return next();
-        } else {
-            return res.status(401).send({
-                success: false,
-                message: "User is not verified."
-            });
+    public isVerified = (format: string = "html"): RequestHandler => {
+        return (req: Request, res: Response, next: NextFunction) => {
+            if (req.user.verified) {
+                return next();
+            } else {
+                this.reply(res, format, {
+                    success: false,
+                    message: "User is not verified."
+                });
+            }
+        }
+    }
+
+    public isAdmin = (format: string = "html"): RequestHandler => {
+        return (req: Request, res: Response, next: NextFunction) => {
+            if (req.user.admin) {
+                return next();
+            } else {
+                if (format == "html") {
+                    return res.redirect("/errors/404/");
+                } else if (format == "redirect") {
+                    if (req.user) {
+                        return res.redirect("/dashboard/");
+                    } else {
+                        return res.redirect("/auth/");
+                    }
+                } else {
+                    return res.status(401).send({
+                        success: false,
+                        message: "User is not admin."
+                    });
+                }
+            }
         }
     }
 

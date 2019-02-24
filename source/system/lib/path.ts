@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -22,8 +22,8 @@
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-import JSFiles from "./files";
-import Config from "../interfaces/config";
+import * as fse from "fs-extra"
+
 import { Promise } from "es6-promise";
 import JSloth from "./core";
 
@@ -49,7 +49,6 @@ export default class JSPath {
      */
     public get(type: string, app: string, file: string): Promise<string> {
         let customPath: string = "../source/views/" + app + "/" + file;
-        console.log(customPath);
         let path: string = "../source/apps/" + app + "/views/" + file;
         if (type == "system") {
             path = "../source/system/apps/" + app + "/views/" + file;
@@ -59,10 +58,13 @@ export default class JSPath {
         const p: Promise<string> = new Promise(
             (resolve: (exists: string) => void, reject: (err: NodeJS.ErrnoException) => void) => {
                 // Resolve promise
-                this.jsloth.files.exists(this.jsloth.context.sourceURL + customPath + ".ejs").then((exist) => {
-                    resolve(customPath);
+                fse.pathExists(this.jsloth.context.sourceURL + customPath + ".ejs").then((exist) => {
+                    if (exist) {
+                        resolve(customPath);
+                    } else {
+                        resolve(path);
+                    }
                 }).catch((err: NodeJS.ErrnoException) => {
-                    console.log(path)
                     resolve(path);
                     throw err;
                 });

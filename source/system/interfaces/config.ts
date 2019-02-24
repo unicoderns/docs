@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -22,16 +22,28 @@
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-import * as MySQL from "./db/connections";
+import { Connection } from "@unicoderns/orm"
 import * as App from "./app";
 
 /*** Configuration interface */
 interface SysConfig {
   dev: boolean;
-  mysql: MySQL.Settings;
+  dbconnection: Connection;
+  aws: AWS;
   system_apps: App.Config[];
   custom_apps: App.Config[];
   token: string;
+}
+
+interface AWS {
+  ses: SES;
+}
+
+interface SES {
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+  noreply: string
 }
 
 export default SysConfig;

@@ -24,6 +24,7 @@
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
+import * as fse from "fs-extra"
 import * as repositories from "../../models/db/repositoriesModel";
 
 import ApiController from "../../../../system/abstract/controllers/api";
@@ -46,14 +47,15 @@ export default class IndexEndPoint extends ApiController {
 
     constructor(jsloth: JSloth, config: any, url: string, namespaces: string[]) {
         super(jsloth, config, url, namespaces);
-        this.repositoriesTable = new repositories.Repositories(jsloth);
+        this.repositoriesTable = new repositories.Repositories(jsloth.db);
         this.batch = new Batch(jsloth);
     }
 
     /*** Define routes */
     protected routes(): void {
         this.router.get("/", this.all);
-        // this.router.put("/sync/:id/", this.sync);
+        this.router.put("/sync/:id/", this.sync);
+        this.router.put("/dev/sync/:id/", this.devSync);
         this.router.post("/new/", this.add);
         this.router.delete("/:id/", this.rm);
     }
@@ -67,7 +69,7 @@ export default class IndexEndPoint extends ApiController {
      * @return json
      */
     private all = (req: Request, res: Response): void => {
-        this.repositoriesTable.getAll().then((data) => {
+        this.repositoriesTable.getAll({}).then((data) => {
             res.json(data);
         }).catch(err => {
             console.error(err);
@@ -87,28 +89,30 @@ export default class IndexEndPoint extends ApiController {
      * @return json
      */
     private rm = (req: Request, res: Response): void => {
-        this.repositoriesTable.get(["name"], { id: req.params.id }).then((data) => {
-            this.batch.rm(this.jsloth.context.baseURL + "/repos/" + data.name + "/")
-                .then(() => {
-                    this.repositoriesTable.delete({ id: req.params.id }).then((data) => {
-                        res.json({
-                            success: true,
-                            message: "Deleted."
-                        });
-                    }).catch(err => {
-                        res.status(500).send({
-                            success: false,
-                            message: "Can't remove from database.",
-                            err: err
-                        })
+        this.repositoriesTable.get({
+            fields: ["name"],
+            where: { id: req.params.id }
+        }).then((data) => {
+            fse.remove(this.jsloth.context.baseURL + "repos/" + data.name + "/").then(() => {
+                this.repositoriesTable.delete({ id: req.params.id }).then((data) => {
+                    res.json({
+                        success: true,
+                        message: "Deleted."
                     });
                 }).catch(err => {
                     res.status(500).send({
                         success: false,
-                        message: "Can't remove folder from server.",
+                        message: "Can't remove from database.",
                         err: err
                     })
                 });
+            }).catch(err => {
+                res.status(500).send({
+                    success: false,
+                    message: "Can't remove folder from server.",
+                    err: err
+                })
+            });
         }).catch(err => {
             console.error(err);
             return res.status(500).send({
@@ -141,8 +145,8 @@ export default class IndexEndPoint extends ApiController {
                         success: true,
                         message: "New repository."
                     });
-                })
-                .catch((err: any) => {
+                }).catch((err: any) => {
+                    console.error(err);
                     res.status(500).send({
                         success: false,
                         message: "Can't clone repository.",
@@ -150,11 +154,126 @@ export default class IndexEndPoint extends ApiController {
                     })
                 });
         }).catch(err => {
+            console.error(err);
             res.status(500).send({
                 success: false,
                 message: "Can't insert into the db.",
                 err: err
             })
+        });
+    };
+
+    /**
+     * Sync repository
+     * Render a json object with a true response.
+     *
+     * @param req { Request } The request object.
+     * @param res { Response } The response object.
+     * @return json
+     */
+    private sync = (req: Request, res: Response): void => {
+        this.repositoriesTable.get({
+            fields: ["name"],
+            where: { id: req.params.id }
+        }).then((data) => {
+            require('simple-git/promise')(this.jsloth.context.baseURL + "repos/" + data.name + "/")
+                .pull('origin', 'master', { '--no-rebase': null })
+                .then(() => {
+                    this.repositoriesTable.update({
+                        data: { synced: "now()" },
+                        where: { id: req.params.id }
+                    }).then(() => {
+                        res.json({
+                            success: true,
+                            message: "Repository updated."
+                        });
+                    }).catch((err: any) => {
+                        res.status(500).send({
+                            success: false,
+                            message: "Can't update database.",
+                            err: err
+                        })
+                    });
+                })
+                .catch((err: any) => {
+                    res.status(500).send({
+                        success: false,
+                        message: "Can't update repository.",
+                        err: err
+                    })
+                });
+        }).catch(err => {
+            console.error(err);
+            return res.status(500).send({
+                success: false,
+                message: "Can't access the database."
+            });
+        });
+    };
+
+
+    /**
+     * Sync repository for developers
+     * Check if repository exists, update if does, clone if not.
+     *
+     * @param req { Request } The request object.
+     * @param res { Response } The response object.
+     * @return json
+     */
+    private devSync = (req: Request, res: Response): void => {
+        this.repositoriesTable.get({
+            fields: ["name", "url"],
+            where: { id: req.params.id }
+        }).then((data) => {
+            let repoPath = this.jsloth.context.baseURL + "repos/" + data.name + "/";
+            fse.pathExists(repoPath).then((exists) => {
+
+                if (exists) {
+                    require('simple-git/promise')(repoPath)
+                        .pull('origin', 'master', { '--no-rebase': null })
+                        .then(() => {
+                            res.json({
+                                success: true,
+                                message: "Repository updated."
+                            });
+                        })
+                        .catch((err: any) => {
+                            res.status(500).send({
+                                success: false,
+                                message: "Can't update repository.",
+                                err: err
+                            })
+                        });
+                } else {
+                    require('simple-git/promise')(this.jsloth.context.baseURL + 'repos/').silent(true)
+                        .clone(data.url)
+                        .then(() => {
+                            res.json({
+                                success: true,
+                                message: "New repository."
+                            });
+                        }).catch((err: any) => {
+                            console.error(err);
+                            res.status(500).send({
+                                success: false,
+                                message: "Can't clone repository.",
+                                err: err
+                            })
+                        });
+                }
+            }).catch(err => {
+                console.error(err);
+                return res.status(500).send({
+                    success: false,
+                    message: "Something went wrong."
+                });
+            });
+        }).catch(err => {
+            console.error(err);
+            return res.status(500).send({
+                success: false,
+                message: "Can't access the database."
+            });
         });
     };
 

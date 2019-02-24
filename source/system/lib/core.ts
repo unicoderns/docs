@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -22,12 +22,18 @@
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
+import * as nodemailer from "nodemailer";
+import * as AWS from "aws-sdk";
+
+import { DB } from "@unicoderns/orm/connection";
+
+import cerberus from "@unicoderns/cerberus";
+
 import Config from "../interfaces/config";
 
 import JSContext from "./context";
-import JSFiles from "./files";
 import JSPath from "./path";
-import JSDB from "./db";
+import Cerberus from "@unicoderns/cerberus";
 
 /**
  * JSloth Library Loader
@@ -36,19 +42,42 @@ export default class JSloth {
     public config: Config;
 
     public context: JSContext;
-    public files: JSFiles;
+    public cerberus: cerberus;
     public path: JSPath;
-    public db: JSDB;
+    public db: DB;
+    public mail: nodemailer.Transporter;
 
     /*** Configuration methods */
     constructor(config: Config, baseURL: string) {
         this.config = config;
-
-        this.context = new JSContext(baseURL);
+        this.context = new JSContext(this, baseURL);
         this.path = new JSPath(this);
 
-        this.files = new JSFiles(config);
-        this.db = new JSDB(config);
+        this.db = new DB({
+            dev: config.dev,
+            connection: config.dbconnection
+        });
+        let authConfig = config.system_apps.find((x: any) => x.name == 'auth');
+        this.cerberus = new Cerberus({
+            dev: config.dev,
+            token: config.token,
+            DB: this.db,
+            settings: {
+                expiration: authConfig.config.expiration,
+                session: authConfig.config.session
+            }
+        });
+
+        AWS.config.accessKeyId = config.aws.ses.accessKeyId;
+        AWS.config.secretAccessKey = config.aws.ses.secretAccessKey;
+        AWS.config.region = config.aws.ses.region;
+
+        this.mail = nodemailer.createTransport({
+            SES: new AWS.SES({
+                apiVersion: '2010-12-01'
+            })
+        });
+
     }
 
 }

@@ -12,34 +12,77 @@
   <!-- Bootstrap core CSS -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css" integrity="sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M"
     crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css?family=Questrial" rel="stylesheet">
   <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp"
     crossorigin="anonymous">
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/css/ie10-viewport-bug-workaround.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+
+  <link rel="stylesheet" href="/docs/styles/render.css">
+
+  <base href="/docs/<%= name %>/<% if (typeof level2 !== 'undefined') { %><%= level1 %>/<%}%>">
+
 </head>
 
 <body>
 
   <nav class="navbar navbar-expand-md navbar-dark bg-dark">
-    <a class="navbar-brand font-weight-bold" href="/">JSloth
-      <span class="font-weight-light h6 text-muted"> Docs</span>
+    <a class="navbar-brand" href="#">
+      unicoderns
+      <span class="font-weight-light h6 text-muted">docs</span>
     </a>
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault"
-      aria-expanded="false" aria-label="Toggle navigation">
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault"
+      aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
   </nav>
 
-  <div class="container align-middle">
+  <div class="container-fluid">
+    <div class="row flex-xl-nowrap">
+      <div class="col-12 col-md-3 col-xl-2 bd-sidebar bg-light">
+        <br>
+        <div id="details">
+          <%= name %> <small>0.1.5</small>
+        </div>
 
-    <div class="pt-5">
-      <h1>Markdown</h1>
+        <nav class="bd-links" id="bd-docs-nav">
+          <% for (let item in menu) { %>
+          <div class="bd-toc-item<% if (item == level1) { %> active<%}%>">
+            <% if (Object.keys(menu[item]).length === 0) { %>
+            <a class="bd-toc-link" href="/docs/<%= name %>/<%= item %>/">
+              <%= String(item).substr(3) %>
+            </a>
+            <%} else { %>
+            <%= String(item).substr(3) %>
+            <%}%>
+
+            <% if (Object.keys(menu[item]).length !== 0) { %>
+            <ul class="nav bd-sidenav">
+              <% for (let subitem in menu[item]) { %>
+              <% if (subitem != "index") { %>
+              <li<% if ((item==level1) && (subitem==level2)) { %> class="active"
+                <%}%>>
+                <a href="/docs/<%= name %>/<%= item %>/<%= subitem %>/">
+                  <%= String(subitem).substr(3) %>
+                </a>
+                </li>
+                <%}%>
+                <%}%>
+            </ul>
+            <%}%>
+
+          </div>
+          <%}%>
+        </nav>
+
+      </div>
+      <main class="col-12 col-md-9 col-xl-10 py-md-3 pl-md-5 bd-content" role="main">
+        <div class="pt-3">
+          <%- main %>
+        </div>
+      </main>
     </div>
-
-    <%- main %>
-
   </div>
-  <!-- /.container -->
-
 
   <!-- Placed at the end of the document so the pages load faster -->
   <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"

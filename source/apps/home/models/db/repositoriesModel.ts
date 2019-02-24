@@ -22,11 +22,7 @@
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-import Model from "../../../../system/abstract/models/model";
-import { field, secret } from "../../../../system/abstract/models/decorators/db";
-import * as fields from "../../../../system/interfaces/db/fields";
-import * as defaults from "../../../../system/interfaces/db/defaults";
-import * as datatypes from "../../../../system/lib/db/datatypes";
+import { field, secret, Fields, Defaults, Datatypes, Models, Model } from "@unicoderns/orm"
 
 export interface Row {
     id?: number;
@@ -38,48 +34,40 @@ export interface Row {
     synced?: number;
 }
 
-
 export class Repositories extends Model {
 
     @field()
-    public id: fields.DataType = new datatypes.Datatypes().ID();    
+    public id: Fields.SystemTypes = new Datatypes().ID();    
 
     @field()
-    public created: fields.DataTimestampType = new datatypes.Datatypes().TIMESTAMP({
+    public created: Fields.DataTimestampType = new Datatypes().TIMESTAMP({
         notNull: true,
-        default: defaults.Timestamp.CURRENT_TIMESTAMP
+        default: Defaults.Timestamp.CURRENT_TIMESTAMP
     });
 
     @field()
-    public name: fields.DataType = new datatypes.Datatypes().VARCHAR({
+    public name: Fields.SystemTypes = new Datatypes().VARCHAR({
         size:45,
-        notNull: true
-       
+        notNull: true,
+        unique: true
     });
 
     @field()
-    public url: fields.DataType = new datatypes.Datatypes().VARCHAR({
+    public url: Fields.SystemTypes = new Datatypes().VARCHAR({
         size: 90,
         notNull : true
     });
 
     @field()
-    public mount: fields.DataType = new datatypes.Datatypes().VARCHAR({
+    public folder: Fields.SystemTypes = new Datatypes().VARCHAR({
         size:45,
         notNull: true
        
     });
 
     @field()
-    public folder: fields.DataType = new datatypes.Datatypes().VARCHAR({
-        size:45,
-        notNull: true
-       
-    });
-
-    @field()
-    public synced: fields.DataTimestampType = new datatypes.Datatypes().TIMESTAMP({
-        default: defaults.Timestamp.CURRENT_TIMESTAMP
+    public synced: Fields.DataTimestampType = new Datatypes().TIMESTAMP({
+        default: Defaults.Timestamp.CURRENT_TIMESTAMP
     });
 
 }

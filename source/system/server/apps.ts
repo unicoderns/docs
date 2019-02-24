@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -21,6 +21,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE          //
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
+
+import * as fse from "fs-extra"
 
 import { App, Config } from "../interfaces/app";
 import { Application, NextFunction } from "express";
@@ -91,20 +93,26 @@ export default class Apps {
             complete: {
                 api: false,
                 routes: false,
+                dash: false,
+                admin: false,
                 public: false,
                 scss: false
             },
             success: {
                 api: false,
                 routes: false,
+                dash: false,
+                admin: false,
                 public: false,
                 scss: false
             },
             errors: {
                 api: "",
                 routes: "",
+                dash: "",
+                admin: "",
                 public: "",
-                scss: ""
+                scss: "",
             }
         };
 
@@ -140,21 +148,27 @@ export default class Apps {
         if (type == "system") {
             appUrl = this.jsloth.context.sourceURL + "system/apps/"
         }
-        if (app.config.engine != "angular") {
-            let compileSCSS = () => {
-                this.batch.compileSCSS(appUrl + app.config.name, this.jsloth.context.baseURL + "dist/static/" + app.config.name).then((success: boolean) => {
-                    app.complete.scss = true;
-                    app.success.scss = success;
-                    this.installed(app, next);
-                }).catch(err => {
-                    app.complete.scss = true;
-                    app.success.scss = false;
-                    app.errors.scss = err;
-                    console.error(err);
-                    this.installed(app, next);
-                });
-            };
+        let compileSCSS = () => {
+            this.batch.compileSCSS(appUrl + app.config.name, this.jsloth.context.baseURL + "dist/static/" + app.config.name).then((success: boolean) => {
+                app.complete.scss = true;
+                app.success.scss = success;
+                this.installed(app, next);
+            }).catch(err => {
+                app.complete.scss = true;
+                app.success.scss = false;
+                app.errors.scss = err;
+                console.error(err);
+                this.installed(app, next);
+            });
+        };
 
+        // No compilations for tests
+        if (process.env.NODE_ENV == "test") {
+            app.complete.public = true;
+            app.success.public = false;
+            app.complete.scss = true;
+            app.success.scss = false;
+        } else {
             this.batch.copyPublic(appUrl + app.config.name + "/public/", this.jsloth.context.baseURL + "dist/static/" + app.config.name).then((success: boolean) => {
                 app.complete.public = true;
                 app.success.public = success;
@@ -166,15 +180,24 @@ export default class Apps {
                 console.error(err);
                 compileSCSS(); // Wait the structure to compile
             });
-        } else {
-            app.complete.public = true;
-            app.success.public = false;
-            app.complete.scss = true;
-            app.success.scss = false;
         }
 
         // Installing regular routes
         this.loadRoutes(app, type, "routes", "", next);
+        // Installing dash routes
+        if ((app.config.dash) && (app.config.dash.activate)) {
+            this.loadRoutes(app, type, "dash", "/dashboard", next);
+        } else {
+            app.complete.dash = true;
+            app.success.dash = false;
+        }
+        // Installing admin routes
+        if ((app.config.admin) && (app.config.admin.activate)) {
+            this.loadRoutes(app, type, "admin", "/admin", next);
+        } else {
+            app.complete.dash = true;
+            app.success.dash = false;
+        }
         // Installing api routes
         this.loadRoutes(app, type, "api", "/api", next);
     }
@@ -184,7 +207,7 @@ export default class Apps {
      * 
      * @param app App configuration.
      * @param appType App family (system|apps)
-     * @param routeType Route family (routes|api)
+     * @param routeType Route family (routes|dash|api)
      * @param basepath Url prefix
      * @param next
      */
@@ -194,30 +217,45 @@ export default class Apps {
             appUrl = this.jsloth.context.sourceURL + "system/apps/"
         }
         let appFileUrl = appUrl + app.config.name + "/" + routeType;
-        this.jsloth.files.exists(appFileUrl + ".ts").then(() => {
-            let url: string = basepath + (app.config.basepath || "/");
-            let appRoute = require(appFileUrl);
-            let route = new appRoute.Urls(this.jsloth, app.config, url, [app.config.name]);
-            this.express.use(url, route.router);
+        fse.pathExists(appFileUrl + ".ts").then((exists: boolean) => {
+            if (exists) {
+                let url: string = basepath + (app.config.basepath || "/");
+                let appRoute = require(appFileUrl);
+                let route = new appRoute.Urls(this.jsloth, app.config, url, [app.config.name]);
+                this.express.use(url, route.router);
 
-            if (routeType == "routes") {
-                app.complete.routes = true;
-                app.success.routes = true;
+                if (routeType == "routes") {
+                    app.complete.routes = true;
+                    app.success.routes = true;
+                } else if (routeType == "dash") {
+                    app.complete.dash = true;
+                    app.success.dash = true;
+                } else if (routeType == "admin") {
+                    app.complete.admin = true;
+                    app.success.admin = true;
+                } else {
+                    app.complete.api = true;
+                    app.success.api = true;
+                }
+                this.installed(app, next);
             } else {
-                app.complete.api = true;
-                app.success.api = true;
+                if (routeType == "routes") {
+                    app.complete.routes = true;
+                    app.success.routes = false;
+                } else if (routeType == "dash") {
+                    app.complete.dash = true;
+                    app.success.dash = false;
+                } else if (routeType == "admin") {
+                    app.complete.admin = true;
+                    app.success.admin = false;
+                } else {
+                    app.complete.api = true;
+                    app.success.api = false;
+                }
+                this.installed(app, next);
             }
-            this.installed(app, next);
         }).catch(err => {
-            if (routeType == "routes") {
-                app.complete.routes = true;
-                app.success.routes = false;
-            } else {
-                app.complete.api = true;
-                app.success.api = false;
-            }
             console.error(err);
-            this.installed(app, next);
         });
     }
 
@@ -228,31 +266,34 @@ export default class Apps {
      * @param next
      */
     private installed(app: App, next: NextFunction): void {
-        let err: string;
-        if ((app.complete.routes) && (app.complete.api) && (app.complete.public) && (app.complete.scss)) {
+        function printError(err: string) {
+            if ((err) && (err.length)) {
+                Log.moduleWarning(err);
+            }
+        }
+
+        if ((app.complete.routes) && (app.complete.dash) && (app.complete.api) && (app.complete.public) && (app.complete.scss)) {
             Log.app(app.config.name);
             Log.appModule("Routes installed", "Routes not found", app.success.routes);
-            err = app.errors.routes;
-            if ((err) && (err.length)) {
-                Log.moduleWarning(err);
-            }
+            printError(app.errors.routes);
+
+            Log.appModule("Dash routes installed", "Dash routes not found or deactivated", app.success.dash);
+            printError(app.errors.dash);
+
+            Log.appModule("Admin routes installed", "Admin routes not found or deactivated", app.success.admin);
+            printError(app.errors.admin);
+
             Log.appModule("Endpoints installed", "Endpoints not found", app.success.api);
-            err = app.errors.api;
-            if ((err) && (err.length)) {
-                Log.moduleWarning(err);
-            }
+            printError(app.errors.api);
+
             if (app.config.engine != "angular") {
                 Log.appModule("Public folder published", "Public folder publication failed", app.success.public);
-                err = app.errors.public;
-                if ((err) && (err.length)) {
-                    Log.moduleWarning(err);
-                }
+                printError(app.errors.public);
+
                 Log.appModule("Styles generated", "No styles to compile", app.success.scss);
-                err = app.errors.scss;
-                if ((err) && (err.length)) {
-                    Log.moduleWarning(err);
-                }
+                printError(app.errors.scss);
             }
+
             app.done = true;
             next(this.apps);
         }

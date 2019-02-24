@@ -1,9 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
-// JSloth Health App                                                                      //
-//                                                                                        //
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2017  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -26,9 +24,8 @@
 
 /// <reference path="../../types/express.d.ts"/>
 
-import * as jwt from "jsonwebtoken";
-import * as users from "../../models/db/usersModel";
-import * as session from "../../models/db/sessionTrackModel";
+import * as users from "@unicoderns/cerberus/db/usersModel";
+import * as verifications from "@unicoderns/cerberus/db/verificationsModel";
 
 import { Request, Response } from "express";
 
@@ -37,8 +34,6 @@ import JSloth from "../../../../lib/core";
 import Sessions from "../../middlewares/sessions";
 
 let ip = require("ip");
-let bcrypt = require("bcrypt-nodejs");
-// import * as bcrypt from "bcrypt-nodejs"; <- Doesn't work
 
 /**
  * Index Endpoint
@@ -48,33 +43,180 @@ let bcrypt = require("bcrypt-nodejs");
  */
 export default class IndexEndPoint extends ApiController {
     private usersTable: users.Users;
-    private sessionTable: session.SessionTrack;
+    private verificationsTable: verifications.Verifications;
     private sessionsMiddleware: Sessions;
     private emailRegex = /^([a-zA-Z0-9_\.\-])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
 
     constructor(jsloth: JSloth, config: any, url: string, namespaces: string[]) {
         super(jsloth, config, url, namespaces);
-        this.usersTable = new users.Users(jsloth);
-        this.sessionTable = new session.SessionTrack(jsloth);
-        this.sessionsMiddleware = new Sessions(jsloth, config)
+
+        this.usersTable = new users.Users(jsloth.db);
+        this.verificationsTable = new verifications.Verifications(jsloth.db);
+
+        this.sessionsMiddleware = new Sessions(jsloth)
     }
 
     /*** Define routes */
     protected routes(): void {
-        this.get("/", "allUsers", this.getAllUsers);
+        let config: any = this.config;
+        // this.get("/", "allUsers", this.getAllUsers);
 
         this.post("/token/", "getToken", this.getToken);
-        this.post("/token/renew/", "renewToken",  this.renewToken);
-        this.post("/token/revoke/", "revokeToken", this.revokeToken);
+        this.post("/token/renew/", "renewToken", this.sessionsMiddleware.auth("json"), this.renewToken);
+        this.post("/token/revoke/", "revokeToken", this.sessionsMiddleware.auth("json"), this.revokeToken);
 
-        this.get("/users/", "userList", this.getList);
-        this.get("/users/1/password/", "user1PasswordChange", this.updatePassword);
+        this.put("/verification/active/:id/", "verify", this.verify);
+        this.post("/verification/generate/", "verificationGeneration", this.sessionsMiddleware.auth("json"), this.verificationGenerator);
 
-        this.get("/fields/", "fields", this.getFieds);
+        if (config.config.signup) {
+            this.post("/signup/", "signup", this.signup);
+        }
+        // Only for testing
+        // this.get("/users/", "userList", this.getList);
+        // this.get("/users/1/password/", "user1PasswordChange", this.updatePassword);
 
-        this.get("/context/", "context", this.getSysContext);
+        // this.get("/fields/", "fields", this.sessionsMiddleware.auth, this.getFieds);
+
+        // this.get("/context/", "context", this.getSysContext);
 
     }
+
+    /**
+     * Create a user.
+     *
+     * @param req { Request } The request object.
+     * @param res { Response } The response object.
+     * @return bool
+     */
+    private signup = (req: Request, res: Response): void => {
+        this.jsloth.cerberus.users.signup(req.params).then((data) => {
+            this.verificationsTable.getToken(data.user.id).then((token: string) => {
+                // send some mail
+                this.jsloth.mail.sendMail({
+                    from: this.config.aws.ses.noreply,
+                    to: req.user.email,
+                    subject: 'Your verification token',
+                    text: 'This is your verification token: ' + token
+                }, (err, info) => {
+                    res.json({
+                        // token: token,
+                        success: true,
+                        message: "Enjoy your token!",
+                        envelope: info.envelope,
+                        messageId: info.messageId
+                    });
+                });
+            }).catch(err => {
+                console.error(err);
+                return res.status(500).send({
+                    success: false,
+                    message: "Something went wrong."
+                });
+            });
+
+            res.json(data);
+        }).catch(err => {
+            console.error(err.error);
+            return res.status(500).send(err);
+        });
+    };
+
+    /**
+     * Create a verification token.
+     *
+     * @param req { Request } The request object.
+     * @param res { Response } The response object.
+     * @return bool
+     */
+    private verificationGenerator = (req: Request, res: Response): void => {
+        if (req.user.verified) {
+            res.json({
+                success: false,
+                message: "Your account is already autenticated"
+            });
+        } else {
+            this.verificationsTable.getToken(req.user.id).then((token: string) => {
+                // send some mail
+                this.jsloth.mail.sendMail({
+                    from: this.config.aws.ses.noreply,
+                    to: req.user.email,
+                    subject: 'Your verification token',
+                    text: 'This is your verification token: ' + token
+                }, (err, info) => {
+                    res.json({
+                        // token: token,
+                        success: true,
+                        message: "Enjoy your token!",
+                        envelope: info.envelope,
+                        messageId: info.messageId
+                    });
+                });
+            }).catch(err => {
+                console.error(err);
+                return res.status(500).send({
+                    success: false,
+                    message: "Something went wrong."
+                });
+            });
+        }
+    };
+
+    /**
+     * Verify token.
+     *
+     * @param req { Request } The request object.
+     * @param res { Response } The response object.
+     * @return bool
+     */
+    private verify = (req: Request, res: Response): void => {
+        this.verificationsTable.get({
+            where: {
+                user: req.params.id,
+                token: req.body.token
+            }
+        }).then((token: any) => {
+            if (typeof token === "undefined") {
+                return res.status(404).send({
+                    success: false,
+                    message: "Invalid token."
+                });
+            } else {
+                this.verificationsTable.delete({ id: token.id }).then((done) => {
+                    this.usersTable.update({
+                        data: {
+                            verified: 1
+                        },
+                        where: {
+                            id: req.params.id
+                        }
+                    }).then((done) => {
+                        res.json({
+                            success: true,
+                            message: "User verified!"
+                        });
+                    }).catch(err => {
+                        console.error(err);
+                        return res.status(500).send({
+                            success: false,
+                            message: "Something went wrong."
+                        });
+                    });
+                }).catch(err => {
+                    console.error(err);
+                    return res.status(500).send({
+                        success: false,
+                        message: "Something went wrong."
+                    });
+                });
+            }
+        }).catch(err => {
+            console.error(err);
+            return res.status(500).send({
+                success: false,
+                message: "Something went wrong."
+            });
+        });
+    };
 
     /**
      * Get selected fields from all users.
@@ -84,9 +226,10 @@ export default class IndexEndPoint extends ApiController {
      * @return array
      */
     private getAllUsers = (req: Request, res: Response): void => {
-        console.log(this.config);
         this.usersTable.delete({ id: 3 }).then((done) => {
-            this.usersTable.getAll(["id", "first_name", "last_name"]).then((data) => {
+            this.usersTable.getAll({
+                fields: ["id", "first_name", "last_name"]
+            }).then((data) => {
                 res.json(data);
             }).catch(err => {
                 console.error(err);
@@ -105,33 +248,6 @@ export default class IndexEndPoint extends ApiController {
     };
 
     /**
-     * Sign JWT token and reply.
-     *
-     * @param req { Request } The request object.
-     * @param res { Response } The response object.
-     * @param config { Object } The config object.
-     * @param data { Object } Data to sign and create token.
-     * @return json
-     */
-    private signAndReply = (req: Request, res: Response, config: any, data: any): void => {
-        let token = jwt.sign(data, req.app.get("token"), {
-            expiresIn: config.config.expiration // 5 years
-        });
-
-        // Set cookie
-        if (config.config.cookie) {
-            res.cookie('token', token, { signed: true, httpOnly: true, maxAge: config.config.expiration * 1000 });
-        }
-
-        // return the information including token as JSON
-        res.json({
-            success: true,
-            message: "Enjoy your token!",
-            token: token
-        });
-    }
-
-    /**
      * Get auth token.
      *
      * @param req { Request } The request object.
@@ -139,55 +255,30 @@ export default class IndexEndPoint extends ApiController {
      * @return json
      */
     private getToken = (req: Request, res: Response): void => {
-        let email: string = req.body.email;
-        let token: string = "";
         let config: any = this.config;
-        let sessionTable = this.sessionTable;
-        let signAndReply = this.signAndReply;
-        let unsafeUsersTable = new users.Users(this.jsloth, "unsafe");
 
-        if (!this.emailRegex.test(email)) {
-            res.json({ success: false, message: "Invalid email address." });
-        } else {
-            // find the user
-            unsafeUsersTable.get([], { email: email, active: 1 }).then((user) => {
-                if (typeof user === "undefined") {
-                    res.json({ success: false, message: "Authentication failed. User and password don't match." });
-                } else {
-                    bcrypt.compare(req.body.password, user.password, function (err: NodeJS.ErrnoException, match: boolean) {
-                        if (match) {
-                            // if user is found and password is right
-                            // create a token
-                            if (config.config.session == "stateful") {
-                                let temp: session.Row = {
-                                    ip: ip.address(),
-                                    user: user.id
-                                };
-                                sessionTable.insert(temp).then((data: any) => {
-                                    signAndReply(req, res, config, { session: data.insertId, user: user.id });
-                                }).catch(err => {
-                                    console.error(err);
-                                    return res.status(500).send({
-                                        success: false,
-                                        message: "Something went wrong."
-                                    });
-                                });
-                            } else {
-                                signAndReply(req, res, config, JSON.parse(JSON.stringify(user)));
-                            }
-                        } else {
-                            res.json({ success: false, message: "Authentication failed. User and password don't match." });
-                        };
-                    });
-                }
-            }).catch(err => {
-                console.error(err);
-                return res.status(500).send({
-                    success: false,
-                    message: "Something went wrong."
-                });
+        this.jsloth.cerberus.sessions.create({
+            email: req.body.email,
+            password: req.body.password
+        }).then((reply) => {
+            // Set cookie
+            if (config.config.cookie) {
+                res.cookie('token', reply.token, { signed: true, httpOnly: true, maxAge: config.config.expiration * 1000 });
+            }
+            res.json({
+                success: reply.success,
+                message: reply.message,
+                token: reply.token
             });
-        }
+        }).catch((reply) => {
+            if (typeof reply.err !== "undefined") {
+                console.error(reply.err);
+            }
+            return res.status(500).send({
+                success: reply.success,
+                message: reply.message
+            });
+        });
     };
 
     /**
@@ -198,12 +289,7 @@ export default class IndexEndPoint extends ApiController {
      * @return json
      */
     private renewToken = (req: Request, res: Response): void => {
-        // Clean data
-        let data = req.user;
-        delete data.iat;
-        delete data.exp;
-
-        this.signAndReply(req, res, this.config, data);
+        res.json(this.jsloth.cerberus.sessions.renew(req.user.id));
     };
 
     /**
@@ -214,29 +300,27 @@ export default class IndexEndPoint extends ApiController {
     * @return json
     */
     private revokeToken = (req: Request, res: Response): void => {
-        if (this.config.config.session == "stateful") {
-            this.sessionTable.delete({ user: req.user.id }).then((done) => {
-                // Expire cookie
-                if (this.config.config.cookie) {
-                    res.cookie('token', { signed: true, httpOnly: true, maxAge: Date.now() });
-                }
-                res.json({
-                    success: true,
-                    message: "Session revoked!"
-                });
-            }).catch(err => {
-                console.error(err);
-                return res.status(500).send({
-                    success: false,
-                    message: "Something went wrong."
-                });
-            });
-        } else {
+        let config: any = this.config;
+
+        this.jsloth.cerberus.sessions.revoke(req.user.id).then((reply) => {
+            // Expire cookie
+            if (config.cookie) {
+                res.cookie('token', { signed: true, httpOnly: true, maxAge: Date.now() });
+            }
             res.json({
-                success: false,
-                message: "This kind of sessions can't be revoked!"
+                success: reply.success,
+                message: reply.message,
+                token: reply.token
             });
-        }
+        }).catch(reply => {
+            if (typeof reply.err !== "undefined") {
+                console.error(reply.err);
+            }
+            return res.status(500).send({
+                success: reply.success,
+                message: reply.message
+            });
+        });
     };
 
     /**
@@ -246,6 +330,7 @@ export default class IndexEndPoint extends ApiController {
      * @param res { Response } The response object.
      * @return array
      */
+    /*
     private getList = (req: Request, res: Response): void => {
         this.usersTable.getAll().then((data) => {
             res.json(data);
@@ -257,6 +342,7 @@ export default class IndexEndPoint extends ApiController {
             });
         });
     };
+    */
 
     /**
      * Update user 1 password.
@@ -265,6 +351,7 @@ export default class IndexEndPoint extends ApiController {
      * @param res { Response } The response object.
      * @return bool
      */
+    /*
     private updatePassword = (req: Request, res: Response): void => {
         this.usersTable.update({ password: bcrypt.hashSync("q123queso", null, null) }, { id: 1 }).then((data) => {
             res.json(data);
@@ -276,6 +363,7 @@ export default class IndexEndPoint extends ApiController {
             });
         });
     };
+    */
 
 
     /**
@@ -285,6 +373,7 @@ export default class IndexEndPoint extends ApiController {
      * @param res { Response } The response object.
      * @return array
      */
+    /*
     private getFieds = (req: Request, res: Response): void => {
         let unsafeUsersTable = new users.Users(this.jsloth, "unsafe");
         let fields = this.usersTable.getFields();
@@ -295,6 +384,7 @@ export default class IndexEndPoint extends ApiController {
             passwordFieldSettings: this.usersTable.password
         });
     };
+    */
 
     /**
      * Get system context.
@@ -303,8 +393,10 @@ export default class IndexEndPoint extends ApiController {
      * @param res { Response } The response object.
      * @return array
      */
+    /*
     private getSysContext = (req: Request, res: Response): void => {
         res.json(this.jsloth.context.export());
     };
+    */
 
 }

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 // The MIT License (MIT)                                                                  //
 //                                                                                        //
-// Copyright (C) 2016  Chriss Mejía - me@chrissmejia.com - chrissmejia.com                //
+// Copyright (C) 2016  Unicoderns SA - info@unicoderns.com - unicoderns.com               //
 //                                                                                        //
 // Permission is hereby granted, free of charge, to any person obtaining a copy           //
 // of this software and associated documentation files (the "Software"), to deal          //
@@ -22,7 +22,7 @@
 // SOFTWARE.                                                                              //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-import * as clc from "cli-color";
+import chalk from "chalk";
 
 /**
  * Log in the terminal.
@@ -33,63 +33,72 @@ class Log {
      * JSloth welcome message
      */
     public hello = (): void => {
-        console.log("");
-        console.log("**********************************************************");
-        console.log("*                                                        *");
-        console.log("*        ██╗███████╗██╗      ██████╗ ████████╗██╗  ██╗   *");
-        console.log("*        ██║██╔════╝██║     ██╔═══██╗╚══██╔══╝██║  ██║   *");
-        console.log("*        ██║███████╗██║     ██║   ██║   ██║   ███████║   *");
-        console.log("*   ██   ██║╚════██║██║     ██║   ██║   ██║   ██╔══██║   *");
-        console.log("*   ╚█████╔╝███████║███████╗╚██████╔╝   ██║   ██║  ██║   *");
-        console.log("*    ╚════╝ ╚══════╝╚══════╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝   *");
-        console.log("*                                      by Chriss Mejía   *");
-        console.log("*                                                        *");
-        console.log("**********************************************************");
-        console.log("*                                                        *");
-        console.log("*                        Welcome                         *");
-        console.log("*                                                        *");
-        console.log("**********************************************************");
-        console.log("");
-        console.log(clc.bgBlackBright("                          Core                            "));
-        console.log("");
+        // No log for tests
+        if (process.env.NODE_ENV != "test") {
+
+            console.log("");
+            console.log("**********************************************************");
+            console.log("*                                                        *");
+            console.log("*        ██╗███████╗██╗      ██████╗ ████████╗██╗  ██╗   *");
+            console.log("*        ██║██╔════╝██║     ██╔═══██╗╚══██╔══╝██║  ██║   *");
+            console.log("*        ██║███████╗██║     ██║   ██║   ██║   ███████║   *");
+            console.log("*   ██   ██║╚════██║██║     ██║   ██║   ██║   ██╔══██║   *");
+            console.log("*   ╚█████╔╝███████║███████╗╚██████╔╝   ██║   ██║  ██║   *");
+            console.log("*    ╚════╝ ╚══════╝╚══════╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝   *");
+            console.log("*                                        by Unicoderns   *");
+            console.log("*                                                        *");
+            console.log("**********************************************************");
+            console.log("*                                                        *");
+            console.log("*                        Welcome                         *");
+            console.log("*                                                        *");
+            console.log("**********************************************************");
+            console.log("");
+            console.log(chalk.bgBlackBright("                          Core                            "));
+            console.log("");
+        }
     }
 
     /**
      * Log an error
      */
     public error = (text: string): void => {
-        console.error(clc.red(text));
+        console.error(chalk.red(text));
     }
 
     /**
      * Log a warning
      */
     public moduleWarning = (text: string): void => {
-        console.error(clc.yellow(text));
+        console.error(chalk.yellow(text));
     }
 
     /**
      * Log a module
      */
     public module = (text: string, fail?: string, number?: number): void => {
-        let log: string = "  ✔ ";
+        // No log for tests
+        if (process.env.NODE_ENV != "test") {
+            let log: string = "  ✔ ";
 
-        if (number) {
-            log = log + text + " (" + number + ")";
-        } else if (number === 0) {
-            log = log + fail;
-        } else {
-            log = log + text;
+            if (number) {
+                log = log + text + " (" + number + ")";
+            } else if (number === 0) {
+                log = log + fail;
+            } else {
+                log = log + text;
+            }
+            console.log(chalk.green(log));
         }
-        console.log(clc.green(log));
     }
-
     /**
      * Log apps section
      */
     public appTitle = (): void => {
-        console.log("");
-        console.log(clc.bgBlackBright("                          Apps                            "));
+        // No log for tests
+        if (process.env.NODE_ENV != "test") {
+            console.log("");
+            console.log(chalk.bgBlackBright("                          Apps                            "));
+        }
     }
 
 
@@ -97,9 +106,12 @@ class Log {
      * Log an app
      */
     public app = (text: string): void => {
-        console.log("");
-        console.log(clc.yellow(" ⚝  ") + text.toUpperCase().charAt(0) + text.substring(1) + " app...");
-        console.log("");
+        // No log for tests
+        if (process.env.NODE_ENV != "test") {
+            console.log("");
+            console.log(chalk.yellow(" ⚝  ") + text.toUpperCase().charAt(0) + text.substring(1) + " app...");
+            console.log("");
+        }
     }
 
     /**
@@ -108,12 +120,15 @@ class Log {
     public appModule = (text: string, fail: string, success: boolean): void => {
         let log: string = "";
 
-        if (success) {
-            log = "    ✔ " + text;
-            console.log(clc.green(log));
-        } else {
-            log = "    ✘ " + fail;
-            console.error(clc.blackBright(log));
+        // No log for tests
+        if (process.env.NODE_ENV != "test") {
+            if (success) {
+                log = "    ✔ " + text;
+                console.log(chalk.green(log));
+            } else {
+                log = "    ✘ " + fail;
+                console.error(chalk.gray(log));
+            }
         }
     }
 
@@ -121,11 +136,14 @@ class Log {
      * Log system run
      */
     public run = (port: number): void => {
-        console.log("");
-        console.log(clc.bgBlackBright("                          Run                             "));
-        console.log("");
-        console.log(" The magic happens on port " + port + " ☆ﾟ.*･｡ﾟ");
-        console.log("");
+        // No log for tests
+        if (process.env.NODE_ENV != "test") {
+            console.log("");
+            console.log(chalk.bgBlackBright("                          Run                             "));
+            console.log("");
+            console.log(" The magic happens on port " + port + " ☆ﾟ.*･｡ﾟ");
+            console.log("");
+        }
     }
 
 }
